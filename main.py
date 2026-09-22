@@ -2,6 +2,7 @@ import os
 import discord
 from discord.ext import tasks, commands
 import requests
+import cloudscraper  # Cloudflare engelini aşmak için eklendi
 from flask import Flask
 from threading import Thread
 
@@ -25,7 +26,7 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = 'AIzaSyAeasnXLf9w2h2_GlEfI8P_Tyfc479nKTI'
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune12'
-DISCORD_CHANNEL_ID = 1551892041737183332
+DISCORD_CHANNEL_ID = 1551892041737183332 
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -34,6 +35,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 last_video_id = None
 is_kick_live = False
+
+# Scraper oluşturuyoruz
+scraper = cloudscraper.create_scraper()
 
 # --- YOUTUBE KONTROLÜ (Shorts Engellemeli) ---
 @tasks.loop(minutes=5)
@@ -81,12 +85,11 @@ async def check_youtube():
 async def check_kick():
     global is_kick_live
     url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
     
     try:
-        response = requests.get(url, headers=headers)
+        # normal requests yerine cloudscraper kullanıyoruz
+        response = scraper.get(url)
+        
         if response.status_code == 200:
             data = response.json()
             livestream = data.get("livestream")
@@ -97,7 +100,15 @@ async def check_kick():
                 
                 if target_channel:
                     stream_title = livestream.get("session_title", "Kick Canlı Yayını")
-                    category = livestream.get("categories", [{}])[0].get("name", "Genel")
+                    
+                    # Kategori verisini güvenli çekme
+                    category = "Genel"
+                    categories = livestream.get("categories")
+                    if isinstance(categories, list) and len(categories) > 0:
+                        category = categories[0].get("name", "Genel")
+                    elif isinstance(categories, dict):
+                        category = categories.get("name", "Genel")
+                        
                     kick_url = f"https://kick.com/{KICK_USERNAME}"
                     
                     await target_channel.send(
@@ -108,6 +119,8 @@ async def check_kick():
                     )
             elif livestream is None:
                 is_kick_live = False
+        else:
+            print(f"Kick API Hatası: Status Code {response.status_code}")
     except Exception as e:
         print(f"Kick kontrol hatası: {e}")
 
@@ -121,6 +134,5 @@ async def on_ready():
 async def ping(ctx):
     await ctx.send('Pong! 🏓 ArcBot çalışıyor.')
 
-# Web sunucusunu başlatıp ardından botu çalıştırıyoruz
 keep_alive()
 bot.run(BOT_TOKEN)
