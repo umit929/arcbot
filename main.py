@@ -2,12 +2,29 @@ import os
 import discord
 from discord.ext import tasks, commands
 import requests
+from flask import Flask
+from threading import Thread
 
-# --- AYARLAR ---
+# --- RENDER KAPANMA ENGELLEYİCİ (WEB SUNUCUSU) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "ArcBot 7/24 Aktif!"
+
+def run():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = 'AIzaSyAeasnXLf9w2h2_GlEfI8P_Tyfc479nKTI'
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
-KICK_USERNAME = 'arctune12'  # Arkadaşının Kick kullanıcı adı
+KICK_USERNAME = 'arctune12'
 DISCORD_CHANNEL_ID = 1551892041737183332
 
 intents = discord.Intents.default()
@@ -104,4 +121,6 @@ async def on_ready():
 async def ping(ctx):
     await ctx.send('Pong! 🏓 ArcBot çalışıyor.')
 
+# Web sunucusunu başlatıp ardından botu çalıştırıyoruz
+keep_alive()
 bot.run(BOT_TOKEN)
