@@ -3,7 +3,7 @@ from discord.ext import tasks, commands
 import requests
 
 # --- AYARLAR ---
-BOT_TOKEN = 'MTU1MTg4NTQzMjA4ODk1Njk0OA.G0DILh.l9gBinbgsJeCj9p3rsru16HNLTV9VhOnq81pPs'
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = 'AIzaSyAeasnXLf9w2h2_GlEfI8P_Tyfc479nKTI'
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune12'  # Arkadaşının Kick kullanıcı adı
