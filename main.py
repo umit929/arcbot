@@ -1,24 +1,10 @@
 import os
-import threading
+import asyncio
 import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
-from flask import Flask
-
-# --- GÜVENLİ WEBSERVER (Sadece 200 OK yanıtı döner, dosya sunmaz) ---
-app = Flask(__name__)
-
-@app.route('/')
-def ping_check():
-    return "ArcBot OK", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-# Sunucuyu arka planda bağımsız başlat
-threading.Thread(target=run_flask, daemon=True).start()
+from aiohttp import web
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -36,6 +22,20 @@ last_video_id = None
 is_kick_live = False
 
 scraper = cloudscraper.create_scraper()
+
+# --- RENDER İÇİN ASENKRON WEB SUNUCUSU (AIOHTTP) ---
+async def handle_ping(request):
+    return web.Response(text="ArcBot 7/24 Aktif!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"[WEB SERVER] {port} portunda asenkron sunucu başlatıldı.")
 
 # --- YOUTUBE KONTROLÜ ---
 @tasks.loop(minutes=5)
@@ -136,6 +136,9 @@ async def check_kick():
 @bot.event
 async def on_ready():
     print(f'✅ {bot.user.name} başarıyla aktif oldu!')
+    # Asenkron web sunucusunu başlatıyoruz
+    await start_web_server()
+    
     if not check_kick.is_running():
         check_kick.start()
         print("[SİSTEM] Kick döngüsü başlatıldı.")
