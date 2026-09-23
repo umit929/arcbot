@@ -136,8 +136,8 @@ async def check_kick():
 @bot.event
 async def on_ready():
     print(f'✅ {bot.user.name} başarıyla aktif oldu!')
-    # Asenkron web sunucusunu başlatıyoruz
-    await start_web_server()
+    # Web sunucusunu arka planda task olarak başlatıyoruz ki kodu engellemesin
+    asyncio.create_task(start_web_server())
     
     if not check_kick.is_running():
         check_kick.start()
