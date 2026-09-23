@@ -107,15 +107,12 @@ async def check_youtube():
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
-    
-    # Kick canlı yayın verisini çeken doğrudan endpoint
-    url = f"https://kick.com/api/v2/channels/{KICK_USERNAME}/livestream"
+    url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": f"https://kick.com/{KICK_USERNAME}"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://kick.com/"
     }
     
     print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...", flush=True)
@@ -126,10 +123,9 @@ async def check_kick():
         
         if response.status_code == 200:
             data = response.json()
-            # /livestream endpoint'i yayın kapalıysa data parametresinde None/null döner
-            livestream = data.get("data") if isinstance(data, dict) else None
+            livestream = data.get("livestream")
             
-            is_live_now = livestream is not None and livestream != {}
+            is_live_now = livestream is not None
             print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı (is_kick_live)?: {is_kick_live}", flush=True)
             
             if is_live_now and not is_kick_live:
