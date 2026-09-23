@@ -107,7 +107,7 @@ async def check_youtube():
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
-    url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
+    url = f"https://kick.com/api/v2/channels/{KICK_USERNAME}"
     
     print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...", flush=True)
     
