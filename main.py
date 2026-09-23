@@ -5,9 +5,11 @@ import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
+import re
+import json
 from aiohttp import web
 
-# Print çıktılarını konsola anında basmaya zorluyoruz (Buffer engelini kaldırır)
+# Print çıktılarını konsola anında basmaya zorluyoruz
 sys.stdout.reconfigure(line_buffering=True)
 
 # --- BOT AYARLARI ---
@@ -45,10 +47,8 @@ class ArcBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Web sunucusunu arka plan görevi olarak başlat
         self.loop.create_task(start_web_server())
         
-        # Görevleri başlat
         if not check_kick.is_running():
             check_kick.start()
             print("[SİSTEM] Kick kontrol döngüsü başlatıldı.", flush=True)
@@ -103,60 +103,55 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ ---
+# --- KICK KONTROLÜ (WEB SCRAPING YÖNTEMİ) ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
-    url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
+    
+    # API yerine doğrudan web sayfasını çekiyoruz (Cloudflare engelini aşar)
+    url = f"https://kick.com/{KICK_USERNAME}"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Referer": "https://kick.com/"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
     }
     
-    print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...", flush=True)
+    print(f"[KICK CHECK] {KICK_USERNAME} web sayfası kontrol ediliyor...", flush=True)
     
     try:
         response = scraper.get(url, headers=headers)
-        print(f"[KICK CHECK] HTTP Yanıt Kodu: {response.status_code}", flush=True)
+        print(f"[KICK CHECK] Sayfa HTTP Kodu: {response.status_code}", flush=True)
         
         if response.status_code == 200:
-            data = response.json()
-            livestream = data.get("livestream")
+            html = response.text
             
-            is_live_now = livestream is not None
-            print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı (is_kick_live)?: {is_kick_live}", flush=True)
+            # Sayfa kaynağında livestream veya is_live bilgisini arıyoruz
+            is_live_now = '"is_live":true' in html or '"livestream":{' in html
+            print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
             
             if is_live_now and not is_kick_live:
                 is_kick_live = True
                 target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
                 
                 if target_channel:
-                    stream_title = livestream.get("session_title", "Kick Canlı Yayını")
+                    # Başlığı HTML içindeki meta etiketlerinden çekmeye çalışıyoruz
+                    title_match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
+                    stream_title = title_match.group(1) if title_match else "Kick Canlı Yayını"
                     
-                    category = "Genel"
-                    categories = livestream.get("categories")
-                    if isinstance(categories, list) and len(categories) > 0:
-                        category = categories[0].get("name", "Genel")
-                    elif isinstance(categories, dict):
-                        category = categories.get("name", "Genel")
-                        
                     kick_url = f"https://kick.com/{KICK_USERNAME}"
                     
                     await target_channel.send(
                         f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
                         f"**Başlık:** {stream_title}\n"
-                        f"**Kategori:** {category}\n"
                         f"Aramıza katılın: {kick_url}"
                     )
-                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!", flush=True)
+                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına atıldı!", flush=True)
                 else:
-                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!", flush=True)
+                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li kanal bulunamadı!", flush=True)
             elif not is_live_now:
                 is_kick_live = False
         else:
-            print(f"[KICK CHECK] ❌ Kick API Hatası: Status Code {response.status_code}", flush=True)
+            print(f"[KICK CHECK] ❌ Kick Sayfa Hatası: Status {response.status_code}", flush=True)
     except Exception as e:
         print(f"[KICK CHECK] ❌ İstek Hatası: {e}", flush=True)
 
