@@ -3,23 +3,6 @@ import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
-from flask import Flask
-import threading
-
-# --- RENDER KAPANMA ENGELLEYİCİ (WEB SUNUCUSU) ---
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "ArcBot 7/24 Aktif!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port, use_reloader=False)
-
-# Flask'ı tamamen bağımsız bir arka plan thread'i olarak başlatıyoruz
-flask_thread = threading.Thread(target=run_flask, daemon=True)
-flask_thread.start()
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -38,10 +21,11 @@ is_kick_live = False
 
 scraper = cloudscraper.create_scraper()
 
-# --- YOUTUBE KONTROLÜ (Shorts Engellemeli) ---
+# --- YOUTUBE KONTROLÜ ---
 @tasks.loop(minutes=5)
 async def check_youtube():
     global last_video_id
+    print("[YOUTUBE CHECK] YouTube kontrol ediliyor...")
     if not YOUTUBE_API_KEY:
         print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!")
         return
@@ -138,10 +122,10 @@ async def on_ready():
     print(f'✅ {bot.user.name} başarıyla aktif oldu!')
     if not check_kick.is_running():
         check_kick.start()
-        print("[SİSTEM] Kick kontrol döngüsü başlatıldı.")
+        print("[SİSTEM] Kick döngüsü başlatıldı.")
     if not check_youtube.is_running():
         check_youtube.start()
-        print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.")
+        print("[SİSTEM] YouTube döngüsü başlatıldı.")
 
 @bot.command()
 async def ping(ctx):
@@ -153,5 +137,4 @@ async def kicktest(ctx):
     is_kick_live = False
     await ctx.send('🔄 Kick durum kontrolü sıfırlandı.')
 
-# Botu çalıştır
 bot.run(BOT_TOKEN)
