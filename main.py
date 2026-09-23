@@ -15,10 +15,10 @@ def home():
 
 def run():
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 def keep_alive():
-    t = Thread(target=run)
+    t = Thread(target=run, daemon=True)
     t.start()
 
 # --- BOT AYARLARI ---
@@ -31,12 +31,20 @@ DISCORD_CHANNEL_ID = 1551892041737183332
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+class ArcBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        # Döngüleri bot başlarken kesin olarak başlatıyoruz
+        check_youtube.start()
+        check_kick.start()
+
+bot = ArcBot()
 
 last_video_id = None
 is_kick_live = False
 
-# Kick Cloudflare engelini aşmak için scraper
 scraper = cloudscraper.create_scraper()
 
 # --- YOUTUBE KONTROLÜ (Shorts Engellemeli) ---
@@ -57,12 +65,11 @@ async def check_youtube():
                 if not video_id:
                     continue
                 
-                # Shorts Kontrolü
                 shorts_check_url = f"https://www.youtube.com/shorts/{video_id}"
                 shorts_res = requests.head(shorts_check_url, allow_redirects=False)
                 
                 if shorts_res.status_code == 200:
-                    continue  # Shorts ise atla
+                    continue
                 
                 if video_id != last_video_id:
                     if last_video_id is None:
@@ -127,19 +134,17 @@ async def check_kick():
                     )
                     print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!")
                 else:
-                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı! Botun kanala erişim izinlerini kontrol edin.")
+                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!")
             elif not is_live_now:
                 is_kick_live = False
         else:
-            print(f"[KICK CHECK] ❌ Kick API Engeli / Hatası: Status Code {response.status_code}")
+            print(f"[KICK CHECK] ❌ Kick API Hatası: Status Code {response.status_code}")
     except Exception as e:
-        print(f"[KICK CHECK] ❌ İstek Hatarı: {e}")
+        print(f"[KICK CHECK] ❌ İstek Hatası: {e}")
 
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} başarıyla aktif oldu!')
-    check_youtube.start()
-    check_kick.start()
 
 @bot.command()
 async def ping(ctx):
@@ -149,7 +154,7 @@ async def ping(ctx):
 async def kicktest(ctx):
     global is_kick_live
     is_kick_live = False
-    await ctx.send('🔄 Kick durum kontrolü sıfırlandı. Bir sonraki döngüde bildirim tekrar denenecek.')
+    await ctx.send('🔄 Kick durum kontrolü sıfırlandı.')
 
 keep_alive()
 bot.run(BOT_TOKEN)
