@@ -11,12 +11,10 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune12'
-DISCORD_CHANNEL_ID = 1551892041737183332 
+DISCORD_CHANNEL_ID = 1551892041737183332
 
 intents = discord.Intents.default()
 intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
 
 last_video_id = None
 is_kick_live = False
@@ -35,7 +33,25 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"[WEB SERVER] {port} portunda asenkron sunucu başlatıldı.")
+    print(f"[WEB SERVER] {port} portunda asenkron sunucu aktif!")
+
+# --- CUSTOM BOT CLASS (discord.py 2.0+ Standardı) ---
+class ArcBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        # Web sunucusunu ve arka plan döngülerini bot başlatılırken devreye sokuyoruz
+        asyncio.create_task(start_web_server())
+        
+        if not check_kick.is_running():
+            check_kick.start()
+            print("[SİSTEM] Kick kontrol döngüsü başlatıldı.")
+        if not check_youtube.is_running():
+            check_youtube.start()
+            print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.")
+
+bot = ArcBot()
 
 # --- YOUTUBE KONTROLÜ ---
 @tasks.loop(minutes=5)
@@ -136,15 +152,6 @@ async def check_kick():
 @bot.event
 async def on_ready():
     print(f'✅ {bot.user.name} başarıyla aktif oldu!')
-    # Web sunucusunu arka planda task olarak başlatıyoruz ki kodu engellemesin
-    asyncio.create_task(start_web_server())
-    
-    if not check_kick.is_running():
-        check_kick.start()
-        print("[SİSTEM] Kick döngüsü başlatıldı.")
-    if not check_youtube.is_running():
-        check_youtube.start()
-        print("[SİSTEM] YouTube döngüsü başlatıldı.")
 
 @bot.command()
 async def ping(ctx):
