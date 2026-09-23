@@ -23,7 +23,7 @@ def keep_alive():
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')  # Gizli ortam değişkeninden çekiyoruz
+YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune12'
 DISCORD_CHANNEL_ID = 1551892041737183332 
@@ -44,7 +44,7 @@ scraper = cloudscraper.create_scraper()
 async def check_youtube():
     global last_video_id
     if not YOUTUBE_API_KEY:
-        print("YouTube API Key bulunamadı! Environment Variable ayarlarını kontrol edin.")
+        print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!")
         return
 
     url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=snippet,id&order=date&maxResults=5"
@@ -82,7 +82,7 @@ async def check_youtube():
                             await target_channel.send(f"🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\nYeni video geldi, iyi seyirler!\n{video_url}")
                     break
     except Exception as e:
-        print(f"YouTube kontrol hatası: {e}")
+        print(f"[YOUTUBE CHECK] Hata: {e}")
 
 # --- KICK KONTROLÜ ---
 @tasks.loop(minutes=3)
@@ -90,21 +90,26 @@ async def check_kick():
     global is_kick_live
     url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
     
+    print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...")
+    
     try:
         response = scraper.get(url)
+        print(f"[KICK CHECK] HTTP Yanıt Kodu: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             livestream = data.get("livestream")
             
-            if livestream is not None and not is_kick_live:
+            is_live_now = livestream is not None
+            print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı (is_kick_live)?: {is_kick_live}")
+            
+            if is_live_now and not is_kick_live:
                 is_kick_live = True
                 target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
                 
                 if target_channel:
                     stream_title = livestream.get("session_title", "Kick Canlı Yayını")
                     
-                    # Kategori bilgisini güvenli çekme
                     category = "Genel"
                     categories = livestream.get("categories")
                     if isinstance(categories, list) and len(categories) > 0:
@@ -120,12 +125,15 @@ async def check_kick():
                         f"**Kategori:** {category}\n"
                         f"Aramıza katılın: {kick_url}"
                     )
-            elif livestream is None:
+                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!")
+                else:
+                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı! Botun kanala erişim izinlerini kontrol edin.")
+            elif not is_live_now:
                 is_kick_live = False
         else:
-            print(f"Kick API Hatası: Status Code {response.status_code}")
+            print(f"[KICK CHECK] ❌ Kick API Engeli / Hatası: Status Code {response.status_code}")
     except Exception as e:
-        print(f"Kick kontrol hatası: {e}")
+        print(f"[KICK CHECK] ❌ İstek Hatarı: {e}")
 
 @bot.event
 async def on_ready():
@@ -136,6 +144,12 @@ async def on_ready():
 @bot.command()
 async def ping(ctx):
     await ctx.send('Pong! 🏓 ArcBot çalışıyor.')
+
+@bot.command()
+async def kicktest(ctx):
+    global is_kick_live
+    is_kick_live = False
+    await ctx.send('🔄 Kick durum kontrolü sıfırlandı. Bir sonraki döngüde bildirim tekrar denenecek.')
 
 keep_alive()
 bot.run(BOT_TOKEN)
