@@ -4,7 +4,7 @@ from discord.ext import tasks, commands
 import requests
 import cloudscraper
 from flask import Flask
-from threading import Thread
+import threading
 
 # --- RENDER KAPANMA ENGELLEYİCİ (WEB SUNUCUSU) ---
 app = Flask('')
@@ -13,13 +13,13 @@ app = Flask('')
 def home():
     return "ArcBot 7/24 Aktif!"
 
-def run():
+def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, use_reloader=False)
 
-def keep_alive():
-    t = Thread(target=run, daemon=True)
-    t.start()
+# Flask'ı tamamen bağımsız bir arka plan thread'i olarak başlatıyoruz
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -31,16 +31,7 @@ DISCORD_CHANNEL_ID = 1551892041737183332
 intents = discord.Intents.default()
 intents.message_content = True
 
-class ArcBot(commands.Bot):
-    def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        # Döngüleri bot başlarken kesin olarak başlatıyoruz
-        check_youtube.start()
-        check_kick.start()
-
-bot = ArcBot()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 last_video_id = None
 is_kick_live = False
@@ -144,7 +135,13 @@ async def check_kick():
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user.name} başarıyla aktif oldu!')
+    print(f'✅ {bot.user.name} başarıyla aktif oldu!')
+    if not check_kick.is_running():
+        check_kick.start()
+        print("[SİSTEM] Kick kontrol döngüsü başlatıldı.")
+    if not check_youtube.is_running():
+        check_youtube.start()
+        print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.")
 
 @bot.command()
 async def ping(ctx):
@@ -156,5 +153,5 @@ async def kicktest(ctx):
     is_kick_live = False
     await ctx.send('🔄 Kick durum kontrolü sıfırlandı.')
 
-keep_alive()
+# Botu çalıştır
 bot.run(BOT_TOKEN)
