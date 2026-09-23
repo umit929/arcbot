@@ -1,21 +1,24 @@
 import os
-import http.server
-import socketserver
 import threading
 import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
+from flask import Flask
 
-# --- RENDER PORT DİNLEYİCİSİ (Çakışmasız Küçük Sunucu) ---
-def start_dummy_server():
+# --- GÜVENLİ WEBSERVER (Sadece 200 OK yanıtı döner, dosya sunmaz) ---
+app = Flask(__name__)
+
+@app.route('/')
+def ping_check():
+    return "ArcBot OK", 200
+
+def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        httpd.serve_forever()
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-# Arka planda Render'ı tatmin edecek port dinleyicisini başlatıyoruz
-threading.Thread(target=start_dummy_server, daemon=True).start()
+# Sunucuyu arka planda bağımsız başlat
+threading.Thread(target=run_flask, daemon=True).start()
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
