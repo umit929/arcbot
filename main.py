@@ -1,10 +1,14 @@
 import os
+import sys
 import asyncio
 import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
 from aiohttp import web
+
+# Print çıktılarını konsola anında basmaya zorluyoruz (Buffer engelini kaldırır)
+sys.stdout.reconfigure(line_buffering=True)
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -33,23 +37,24 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"[WEB SERVER] {port} portunda asenkron sunucu aktif!")
+    print(f"[WEB SERVER] {port} portunda asenkron sunucu aktif!", flush=True)
 
-# --- CUSTOM BOT CLASS (discord.py 2.0+ Standardı) ---
+# --- CUSTOM BOT CLASS ---
 class ArcBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Web sunucusunu ve arka plan döngülerini bot başlatılırken devreye sokuyoruz
-        asyncio.create_task(start_web_server())
+        # Web sunucusunu arka plan görevi olarak başlat
+        self.loop.create_task(start_web_server())
         
+        # Görevleri başlat
         if not check_kick.is_running():
             check_kick.start()
-            print("[SİSTEM] Kick kontrol döngüsü başlatıldı.")
+            print("[SİSTEM] Kick kontrol döngüsü başlatıldı.", flush=True)
         if not check_youtube.is_running():
             check_youtube.start()
-            print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.")
+            print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.", flush=True)
 
 bot = ArcBot()
 
@@ -57,9 +62,9 @@ bot = ArcBot()
 @tasks.loop(minutes=5)
 async def check_youtube():
     global last_video_id
-    print("[YOUTUBE CHECK] YouTube kontrol ediliyor...")
+    print("[YOUTUBE CHECK] YouTube kontrol ediliyor...", flush=True)
     if not YOUTUBE_API_KEY:
-        print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!")
+        print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!", flush=True)
         return
 
     url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=snippet,id&order=date&maxResults=5"
@@ -96,7 +101,7 @@ async def check_youtube():
                             await target_channel.send(f"🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\nYeni video geldi, iyi seyirler!\n{video_url}")
                     break
     except Exception as e:
-        print(f"[YOUTUBE CHECK] Hata: {e}")
+        print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
 # --- KICK KONTROLÜ ---
 @tasks.loop(minutes=3)
@@ -104,18 +109,18 @@ async def check_kick():
     global is_kick_live
     url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
     
-    print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...")
+    print(f"[KICK CHECK] {KICK_USERNAME} kontrol ediliyor...", flush=True)
     
     try:
         response = scraper.get(url)
-        print(f"[KICK CHECK] HTTP Yanıt Kodu: {response.status_code}")
+        print(f"[KICK CHECK] HTTP Yanıt Kodu: {response.status_code}", flush=True)
         
         if response.status_code == 200:
             data = response.json()
             livestream = data.get("livestream")
             
             is_live_now = livestream is not None
-            print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı (is_kick_live)?: {is_kick_live}")
+            print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı (is_kick_live)?: {is_kick_live}", flush=True)
             
             if is_live_now and not is_kick_live:
                 is_kick_live = True
@@ -139,19 +144,19 @@ async def check_kick():
                         f"**Kategori:** {category}\n"
                         f"Aramıza katılın: {kick_url}"
                     )
-                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!")
+                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!", flush=True)
                 else:
-                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!")
+                    print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!", flush=True)
             elif not is_live_now:
                 is_kick_live = False
         else:
-            print(f"[KICK CHECK] ❌ Kick API Hatası: Status Code {response.status_code}")
+            print(f"[KICK CHECK] ❌ Kick API Hatası: Status Code {response.status_code}", flush=True)
     except Exception as e:
-        print(f"[KICK CHECK] ❌ İstek Hatası: {e}")
+        print(f"[KICK CHECK] ❌ İstek Hatası: {e}", flush=True)
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user.name} başarıyla aktif oldu!')
+    print(f'✅ {bot.user.name} başarıyla aktif oldu!', flush=True)
 
 @bot.command()
 async def ping(ctx):
