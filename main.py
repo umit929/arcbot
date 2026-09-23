@@ -2,7 +2,7 @@ import os
 import discord
 from discord.ext import tasks, commands
 import requests
-import cloudscraper  # Cloudflare engelini aşmak için eklendi
+import cloudscraper
 from flask import Flask
 from threading import Thread
 
@@ -23,7 +23,7 @@ def keep_alive():
 
 # --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-YOUTUBE_API_KEY = 'AIzaSyAeasnXLf9w2h2_GlEfI8P_Tyfc479nKTI'
+YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')  # Gizli ortam değişkeninden çekiyoruz
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune12'
 DISCORD_CHANNEL_ID = 1551892041737183332 
@@ -36,13 +36,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 last_video_id = None
 is_kick_live = False
 
-# Scraper oluşturuyoruz
+# Kick Cloudflare engelini aşmak için scraper
 scraper = cloudscraper.create_scraper()
 
 # --- YOUTUBE KONTROLÜ (Shorts Engellemeli) ---
 @tasks.loop(minutes=5)
 async def check_youtube():
     global last_video_id
+    if not YOUTUBE_API_KEY:
+        print("YouTube API Key bulunamadı! Environment Variable ayarlarını kontrol edin.")
+        return
+
     url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=snippet,id&order=date&maxResults=5"
     
     try:
@@ -87,7 +91,6 @@ async def check_kick():
     url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
     
     try:
-        # normal requests yerine cloudscraper kullanıyoruz
         response = scraper.get(url)
         
         if response.status_code == 200:
@@ -101,7 +104,7 @@ async def check_kick():
                 if target_channel:
                     stream_title = livestream.get("session_title", "Kick Canlı Yayını")
                     
-                    # Kategori verisini güvenli çekme
+                    # Kategori bilgisini güvenli çekme
                     category = "Genel"
                     categories = livestream.get("categories")
                     if isinstance(categories, list) and len(categories) > 0:
