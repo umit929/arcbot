@@ -4,8 +4,6 @@ import asyncio
 import discord
 from discord.ext import tasks, commands
 import requests
-import cloudscraper
-import json
 from aiohttp import web
 
 # Print çıktılarını konsola anında basmaya zorluyoruz
@@ -23,8 +21,6 @@ intents.message_content = True
 
 last_video_id = None
 is_kick_live = False
-
-scraper = cloudscraper.create_scraper()
 
 # --- RENDER İÇİN ASENKRON WEB SUNUCUSU (AIOHTTP) ---
 async def handle_ping(request):
@@ -102,40 +98,38 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ (MOBIL / EMBED YÖNTEMİ) ---
+# --- KICK KONTROLÜ (PROXY ÜZERİNDEN IP ENGELİ AŞMA) ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
     
-    # Mobil uygulama/embed uç noktası (Cloudflare IP bloğuna takılmaz)
-    url = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
+    # Target URL
+    kick_target = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
+    # Allorigins Proxy adresi (Render IP'sini gizler, engeli aşar)
+    url = f"https://api.allorigins.win/get?url={requests.utils.quote(kick_target)}"
     
-    # Android Mobil Uygulama Başlıkları (Cloudflare Bypass)
-    headers = {
-        "User-Agent": "Kick/1.0.43 (Android; Mobile; tr_TR)",
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "Connection": "Keep-Alive"
-    }
-    
-    print(f"[KICK CHECK] {KICK_USERNAME} mobil endpoint üzerinden kontrol ediliyor...", flush=True)
+    print(f"[KICK CHECK] {KICK_USERNAME} proxy üzerinden kontrol ediliyor...", flush=True)
     
     try:
-        # cloudscraper yerine requests session ile mobil header basıyoruz
-        session = requests.Session()
-        response = session.get(url, headers=headers, timeout=12)
-        print(f"[KICK CHECK] HTTP Yanıt Kodu: {response.status_code}", flush=True)
+        response = requests.get(url, timeout=15)
+        print(f"[KICK CHECK] Proxy HTTP Kodu: {response.status_code}", flush=True)
         
         is_live_now = False
         stream_title = f"{KICK_USERNAME} Kick Canlı Yayını"
         
         if response.status_code == 200:
-            data = response.json()
-            livestream = data.get("livestream")
+            wrapper_data = response.json()
+            # Proxy'den dönen gömülü JSON yanıtını çözüyoruz
+            raw_contents = wrapper_data.get("contents")
             
-            if livestream is not None and isinstance(livestream, dict):
-                is_live_now = True
-                stream_title = livestream.get("session_title", stream_title)
+            if raw_contents:
+                import json
+                kick_data = json.loads(raw_contents)
+                livestream = kick_data.get("livestream")
+                
+                if livestream is not None and isinstance(livestream, dict):
+                    is_live_now = True
+                    stream_title = livestream.get("session_title", stream_title)
         
         print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
         
@@ -151,7 +145,7 @@ async def check_kick():
                     f"**Başlık:** {stream_title}\n"
                     f"Aramıza katılın: {kick_url}"
                 )
-                print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına atıldı!", flush=True)
+                print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına gönderildi!", flush=True)
             else:
                 print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!", flush=True)
         elif not is_live_now:
