@@ -6,10 +6,9 @@ from discord.ext import tasks, commands
 import requests
 import cloudscraper
 import re
-import json
 from aiohttp import web
 
-# Print çıktılarını konsola anında basmaya zorluyoruz
+# Print çıktılarını konsola anında basmaya zorluyoruz (Buffer engelini kaldırır)
 sys.stdout.reconfigure(line_buffering=True)
 
 # --- BOT AYARLARI ---
@@ -103,17 +102,19 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ (WEB SCRAPING YÖNTEMİ) ---
+# --- KICK KONTROLÜ (GÜNCELLENMİŞ WEB SCRAPING) ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
     
-    # API yerine doğrudan web sayfasını çekiyoruz (Cloudflare engelini aşar)
     url = f"https://kick.com/{KICK_USERNAME}"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
     }
     
     print(f"[KICK CHECK] {KICK_USERNAME} web sayfası kontrol ediliyor...", flush=True)
@@ -125,8 +126,11 @@ async def check_kick():
         if response.status_code == 200:
             html = response.text
             
-            # Sayfa kaynağında livestream veya is_live bilgisini arıyoruz
-            is_live_now = '"is_live":true' in html or '"livestream":{' in html
+            # Kick'in canlı yayın verisini içeren JSON kalıplarını yakalama
+            has_livestream_data = '"livestream":{' in html and '"livestream":null' not in html and '"livestream":{}' not in html
+            has_is_live_true = '"is_live":true' in html or '"isLive":true' in html
+            
+            is_live_now = has_livestream_data or has_is_live_true
             print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
             
             if is_live_now and not is_kick_live:
@@ -134,9 +138,8 @@ async def check_kick():
                 target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
                 
                 if target_channel:
-                    # Başlığı HTML içindeki meta etiketlerinden çekmeye çalışıyoruz
                     title_match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
-                    stream_title = title_match.group(1) if title_match else "Kick Canlı Yayını"
+                    stream_title = title_match.group(1) if title_match else f"{KICK_USERNAME} Kick Canlı Yayını"
                     
                     kick_url = f"https://kick.com/{KICK_USERNAME}"
                     
