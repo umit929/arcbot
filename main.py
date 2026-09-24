@@ -13,7 +13,7 @@ sys.stdout.reconfigure(line_buffering=True)
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
-KICK_USERNAME = 'arctune12'
+KICK_USERNAME = 'arctune'
 DISCORD_CHANNEL_ID = 1551892041737183332
 
 intents = discord.Intents.default()
