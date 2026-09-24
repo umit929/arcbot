@@ -98,38 +98,30 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ (PROXY ÜZERİNDEN IP ENGELİ AŞMA) ---
+# --- KICK KONTROLÜ (HIZLI CORS PROXY) ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
     
-    # Target URL
-    kick_target = f"https://kick.com/api/v1/channels/{KICK_USERNAME}"
-    # Allorigins Proxy adresi (Render IP'sini gizler, engeli aşar)
-    url = f"https://api.allorigins.win/get?url={requests.utils.quote(kick_target)}"
+    # Doğrudan hızlı CorsProxy üzerinden istek
+    url = f"https://corsproxy.io/?https://kick.com/api/v1/channels/{KICK_USERNAME}"
     
-    print(f"[KICK CHECK] {KICK_USERNAME} proxy üzerinden kontrol ediliyor...", flush=True)
+    print(f"[KICK CHECK] {KICK_USERNAME} CorsProxy üzerinden kontrol ediliyor...", flush=True)
     
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=10)
         print(f"[KICK CHECK] Proxy HTTP Kodu: {response.status_code}", flush=True)
         
         is_live_now = False
         stream_title = f"{KICK_USERNAME} Kick Canlı Yayını"
         
         if response.status_code == 200:
-            wrapper_data = response.json()
-            # Proxy'den dönen gömülü JSON yanıtını çözüyoruz
-            raw_contents = wrapper_data.get("contents")
+            kick_data = response.json()
+            livestream = kick_data.get("livestream")
             
-            if raw_contents:
-                import json
-                kick_data = json.loads(raw_contents)
-                livestream = kick_data.get("livestream")
-                
-                if livestream is not None and isinstance(livestream, dict):
-                    is_live_now = True
-                    stream_title = livestream.get("session_title", stream_title)
+            if livestream is not None and isinstance(livestream, dict):
+                is_live_now = True
+                stream_title = livestream.get("session_title", stream_title)
         
         print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
         
