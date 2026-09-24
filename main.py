@@ -5,6 +5,7 @@ import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
+import re
 from bs4 import BeautifulSoup
 from aiohttp import web
 
@@ -102,7 +103,7 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ (BEAUTIFULSOUP İLE DOĞRUDAN HTML PARSING) ---
+# --- KICK KONTROLÜ ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
@@ -123,14 +124,11 @@ async def check_kick():
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Sayfa meta verilerinden ve DOM elementlerinden canlı yayın kontrolü
             raw_html = response.text
             
-            # 1. Yayın kapalı değilse ve canlı göstergeleri mevcutsa
             is_live_now = False
             
-            # Kick'in HTML içine gömdüğü canlı yayın göstergeleri
+            # Canlı yayın göstergeleri
             if 'video-player__live-indicator' in raw_html or '"is_live":true' in raw_html or '"isLive":true' in raw_html:
                 is_live_now = True
             elif soup.find("div", {"class": re.compile(r".*live.*", re.I)}) and "offline" not in raw_html.lower():
