@@ -22,19 +22,48 @@ intents.message_content = True
 last_video_id = None
 is_kick_live = False
 
-# --- RENDER İÇİN ASENKRON WEB SUNUCUSU (AIOHTTP) ---
+# --- WEBHOOK VE WEB SUNUCUSU (AIOHTTP) ---
 async def handle_ping(request):
     return web.Response(text="ArcBot 7/24 Aktif!")
+
+async def handle_kick_webhook(request):
+    global is_kick_live
+    try:
+        data = await request.json()
+        print(f"[WEBHOOK] Kick bildirimi alındı: {data}", flush=True)
+        
+        is_live = data.get("is_live", False)
+        stream_title = data.get("title", f"{KICK_USERNAME} Kick Canlı Yayını")
+        
+        if is_live and not is_kick_live:
+            is_kick_live = True
+            target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
+            if target_channel:
+                kick_url = f"https://kick.com/{KICK_USERNAME}"
+                await target_channel.send(
+                    f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
+                    f"**Başlık:** {stream_title}\n"
+                    f"Aramıza katılın: {kick_url}"
+                )
+                print("[WEBHOOK] 🎉 Discord kanalına bildirim gönderildi!", flush=True)
+        elif not is_live:
+            is_kick_live = False
+            
+        return web.Response(text="OK", status=200)
+    except Exception as e:
+        print(f"[WEBHOOK HATA] {e}", flush=True)
+        return web.Response(text="Error", status=400)
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle_ping)
+    app.router.add_post('/kick-webhook', handle_kick_webhook)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"[WEB SERVER] {port} portunda asenkron sunucu aktif!", flush=True)
+    print(f"[WEB SERVER] {port} portunda Webhook dinleyici aktif!", flush=True)
 
 # --- CUSTOM BOT CLASS ---
 class ArcBot(commands.Bot):
@@ -44,9 +73,6 @@ class ArcBot(commands.Bot):
     async def setup_hook(self):
         self.loop.create_task(start_web_server())
         
-        if not check_kick.is_running():
-            check_kick.start()
-            print("[SİSTEM] Kick kontrol döngüsü başlatıldı.", flush=True)
         if not check_youtube.is_running():
             check_youtube.start()
             print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.", flush=True)
@@ -97,54 +123,6 @@ async def check_youtube():
                     break
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
-
-# --- KICK KONTROLÜ (HIZLI CORS PROXY) ---
-@tasks.loop(minutes=3)
-async def check_kick():
-    global is_kick_live
-    
-    # Doğrudan hızlı CorsProxy üzerinden istek
-    url = f"https://corsproxy.io/?https://kick.com/api/v1/channels/{KICK_USERNAME}"
-    
-    print(f"[KICK CHECK] {KICK_USERNAME} CorsProxy üzerinden kontrol ediliyor...", flush=True)
-    
-    try:
-        response = requests.get(url, timeout=10)
-        print(f"[KICK CHECK] Proxy HTTP Kodu: {response.status_code}", flush=True)
-        
-        is_live_now = False
-        stream_title = f"{KICK_USERNAME} Kick Canlı Yayını"
-        
-        if response.status_code == 200:
-            kick_data = response.json()
-            livestream = kick_data.get("livestream")
-            
-            if livestream is not None and isinstance(livestream, dict):
-                is_live_now = True
-                stream_title = livestream.get("session_title", stream_title)
-        
-        print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
-        
-        if is_live_now and not is_kick_live:
-            is_kick_live = True
-            target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
-            
-            if target_channel:
-                kick_url = f"https://kick.com/{KICK_USERNAME}"
-                
-                await target_channel.send(
-                    f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
-                    f"**Başlık:** {stream_title}\n"
-                    f"Aramıza katılın: {kick_url}"
-                )
-                print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına gönderildi!", flush=True)
-            else:
-                print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!", flush=True)
-        elif not is_live_now:
-            is_kick_live = False
-            
-    except Exception as e:
-        print(f"[KICK CHECK] ❌ İstek Hatası: {e}", flush=True)
 
 @bot.event
 async def on_ready():
