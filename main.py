@@ -5,6 +5,7 @@ import discord
 from discord.ext import tasks, commands
 import requests
 import cloudscraper
+from bs4 import BeautifulSoup
 from aiohttp import web
 
 # Print çıktılarını konsola anında basmaya zorluyoruz
@@ -101,54 +102,64 @@ async def check_youtube():
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
 
-# --- KICK KONTROLÜ (GÜNCEL API PROXY) ---
+# --- KICK KONTROLÜ (BEAUTIFULSOUP İLE DOĞRUDAN HTML PARSING) ---
 @tasks.loop(minutes=3)
 async def check_kick():
     global is_kick_live
     
-    # Kick'in Cloudflare engeline takılmayan güncel kanal API uç noktası
-    url = f"https://kick-api.fumo.workers.dev/channel/{KICK_USERNAME}"
+    url = f"https://kick.com/{KICK_USERNAME}"
     
-    print(f"[KICK CHECK] {KICK_USERNAME} kanalı kontrol ediliyor...", flush=True)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+    }
+    
+    print(f"[KICK CHECK] {KICK_USERNAME} sayfası BeautifulSoup ile kontrol ediliyor...", flush=True)
     
     try:
-        response = requests.get(url, timeout=10)
-        print(f"[KICK CHECK] API Yanıt Kodu: {response.status_code}", flush=True)
+        response = scraper.get(url, headers=headers, timeout=15)
+        print(f"[KICK CHECK] Sayfa HTTP Kodu: {response.status_code}", flush=True)
         
         if response.status_code == 200:
-            data = response.json()
-            livestream = data.get("livestream")
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-            is_live_now = livestream is not None and isinstance(livestream, dict)
-            print(f"[KICK CHECK] Livestream Var mı?: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
+            # Sayfa meta verilerinden ve DOM elementlerinden canlı yayın kontrolü
+            raw_html = response.text
+            
+            # 1. Yayın kapalı değilse ve canlı göstergeleri mevcutsa
+            is_live_now = False
+            
+            # Kick'in HTML içine gömdüğü canlı yayın göstergeleri
+            if 'video-player__live-indicator' in raw_html or '"is_live":true' in raw_html or '"isLive":true' in raw_html:
+                is_live_now = True
+            elif soup.find("div", {"class": re.compile(r".*live.*", re.I)}) and "offline" not in raw_html.lower():
+                is_live_now = True
+
+            print(f"[KICK CHECK] Canlı Yayın Durumu: {is_live_now} | Önceden Canlı mıydı?: {is_kick_live}", flush=True)
             
             if is_live_now and not is_kick_live:
                 is_kick_live = True
                 target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
                 
                 if target_channel:
-                    stream_title = livestream.get("session_title", f"{KICK_USERNAME} Kick Canlı Yayını")
-                    category_name = "Genel"
-                    
-                    categories = livestream.get("categories")
-                    if isinstance(categories, list) and len(categories) > 0:
-                        category_name = categories[0].get("name", "Genel")
+                    og_title = soup.find("meta", property="og:title")
+                    stream_title = og_title["content"] if og_title else f"{KICK_USERNAME} Kick Canlı Yayını"
                     
                     kick_url = f"https://kick.com/{KICK_USERNAME}"
                     
                     await target_channel.send(
                         f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
                         f"**Başlık:** {stream_title}\n"
-                        f"**Kategori:** {category_name}\n"
                         f"Aramıza katılın: {kick_url}"
                     )
-                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına gönderildi!", flush=True)
+                    print("[KICK CHECK] 🎉 Bildirim mesajı Discord kanalına başarıyla atıldı!", flush=True)
                 else:
                     print(f"[KICK CHECK] ❌ HATA: {DISCORD_CHANNEL_ID} ID'li Discord kanalı bulunamadı!", flush=True)
             elif not is_live_now:
                 is_kick_live = False
         else:
-            print(f"[KICK CHECK] ❌ Kick API Hatası: Status {response.status_code}", flush=True)
+            print(f"[KICK CHECK] ❌ Kick Sayfa Hatası: Status {response.status_code}", flush=True)
     except Exception as e:
         print(f"[KICK CHECK] ❌ İstek Hatası: {e}", flush=True)
 
