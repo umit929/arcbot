@@ -1,0 +1,46 @@
+name: Kick Stream Checker
+
+on:
+  schedule:
+    # Her 5 dakikada bir çalışır
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # İstediğin zaman manuel tetiklemek için
+
+jobs:
+  check-kick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kick API Kontrol ve Webhook Tetikleme
+        run: |
+          python -c '
+          import requests
+
+          kick_url = "https://kick.com/api/v1/channels/arctune"
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+          }
+
+          try:
+              res = requests.get(kick_url, headers=headers, timeout=10)
+              if res.status_code == 200:
+                  data = res.json()
+                  livestream = data.get("livestream")
+                  
+                  is_live = livestream is not None and isinstance(livestream, dict)
+                  title = livestream.get("session_title", "Arctune Kick Canlı Yayını") if is_live else ""
+                  
+                  if is_live:
+                      webhook_url = "https://arcbot-3wzl.onrender.com/kick-webhook"
+                      payload = {
+                          "is_live": True,
+                          "title": title
+                      }
+                      requests.post(webhook_url, json=payload, timeout=5)
+                      print(f"Yayın aktif! Render a bildirim gönderildi: {title}")
+                  else:
+                      print("Yayın kapalı.")
+              else:
+                  print(f"Kick HTTP hatası: {res.status_code}")
+          except Exception as e:
+              print(f"Hata oluştu: {e}")
+          '
