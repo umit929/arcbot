@@ -4,7 +4,7 @@ on:
   schedule:
     # Her 5 dakikada bir çalışır
     - cron: '*/5 * * * *'
-  workflow_dispatch: # İstediğin zaman manuel tetiklemek için
+  workflow_dispatch:
 
 jobs:
   check-kick:
@@ -16,6 +16,7 @@ jobs:
           import requests
 
           kick_url = "https://kick.com/api/v1/channels/arctune"
+          webhook_url = "https://arcbot-3wzl.onrender.com/kick-webhook"
           headers = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
           }
@@ -29,16 +30,13 @@ jobs:
                   is_live = livestream is not None and isinstance(livestream, dict)
                   title = livestream.get("session_title", "Arctune Kick Canlı Yayını") if is_live else ""
                   
-                  if is_live:
-                      webhook_url = "https://arcbot-3wzl.onrender.com/kick-webhook"
-                      payload = {
-                          "is_live": True,
-                          "title": title
-                      }
-                      requests.post(webhook_url, json=payload, timeout=5)
-                      print(f"Yayın aktif! Render a bildirim gönderildi: {title}")
-                  else:
-                      print("Yayın kapalı.")
+                  # Yayın açık veya kapalı olsa da durumu Render ya her türlü bildiriyoruz!
+                  payload = {
+                      "is_live": is_live,
+                      "title": title
+                  }
+                  requests.post(webhook_url, json=payload, timeout=5)
+                  print(f"Render a durum gönderildi. Yayın canlı mı?: {is_live}")
               else:
                   print(f"Kick HTTP hatası: {res.status_code}")
           except Exception as e:
