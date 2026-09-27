@@ -30,7 +30,7 @@ jobs:
                   is_live = livestream is not None and isinstance(livestream, dict)
                   title = livestream.get("session_title", "Arctune Kick Canlı Yayını") if is_live else ""
                   
-                  # Yayın açık veya kapalı olsa da durumu Render ya her türlü bildiriyoruz!
+                  # Yayın açık da olsa kapalı da olsa Render a durum bilgisini fırlatıyoruz!
                   payload = {
                       "is_live": is_live,
                       "title": title
