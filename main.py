@@ -16,6 +16,10 @@ YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
 KICK_USERNAME = 'arctune'
 DISCORD_CHANNEL_ID = 1551892041737183332
 
+# ROL ID'LERİ
+KICK_ROLE_ID = "1554136780402466826"
+YOUTUBE_ROLE_ID = "1554137072003190794"
+
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -41,7 +45,7 @@ async def handle_kick_webhook(request):
             if target_channel:
                 kick_url = f"https://kick.com/{KICK_USERNAME}"
                 await target_channel.send(
-                    f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
+                    f"<@&{KICK_ROLE_ID}> 🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
                     f"**Başlık:** {stream_title}\n"
                     f"Aramıza katılın: {kick_url}"
                 )
@@ -117,9 +121,9 @@ async def check_youtube():
                         video_url = f"https://www.youtube.com/watch?v={video_id}"
                         
                         if live_broadcast == "live":
-                            await target_channel.send(f"🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\nYayın açıldı, kaçırmayın!\n{video_url}")
+                            await target_channel.send(f"<@&{YOUTUBE_ROLE_ID}> 🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\nYayın açıldı, kaçırmayın!\n{video_url}")
                         else:
-                            await target_channel.send(f"🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\nYeni video geldi, iyi seyirler!\n{video_url}")
+                            await target_channel.send(f"<@&{YOUTUBE_ROLE_ID}> 🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\nYeni video geldi, iyi seyirler!\n{video_url}")
                     break
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
