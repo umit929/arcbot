@@ -45,9 +45,10 @@ async def handle_kick_webhook(request):
             if target_channel:
                 kick_url = f"https://kick.com/{KICK_USERNAME}"
                 await target_channel.send(
-                    f"<@&{KICK_ROLE_ID}> 🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
+                    f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
                     f"**Başlık:** {stream_title}\n"
-                    f"Aramıza katılın: {kick_url}"
+                    f"Aramıza katılın: {kick_url}\n\n"
+                    f"<@&{KICK_ROLE_ID}>"
                 )
                 print("[WEBHOOK] 🎉 Discord kanalına bildirim gönderildi!", flush=True)
         elif not is_live:
@@ -121,9 +122,17 @@ async def check_youtube():
                         video_url = f"https://www.youtube.com/watch?v={video_id}"
                         
                         if live_broadcast == "live":
-                            await target_channel.send(f"<@&{YOUTUBE_ROLE_ID}> 🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\nYayın açıldı, kaçırmayın!\n{video_url}")
+                            await target_channel.send(
+                                f"🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\n"
+                                f"Yayın açıldı, kaçırmayın!\n{video_url}\n\n"
+                                f"<@&{YOUTUBE_ROLE_ID}>"
+                            )
                         else:
-                            await target_channel.send(f"<@&{YOUTUBE_ROLE_ID}> 🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\nYeni video geldi, iyi seyirler!\n{video_url}")
+                            await target_channel.send(
+                                f"🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\n"
+                                f"Yeni video geldi, iyi seyirler!\n{video_url}\n\n"
+                                f"<@&{YOUTUBE_ROLE_ID}>"
+                            )
                     break
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
