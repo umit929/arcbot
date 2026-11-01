@@ -23,9 +23,9 @@ YOUTUBE_ROLE_ID = "1554137072003190794"
 intents = discord.Intents.default()
 intents.message_content = True
 
-# Son bildirimi gönderilmiş video ID'lerini tutan küme (Spam engelleme)
 seen_video_ids = set()
 is_kick_live = False
+is_initial_check = True
 
 # --- WEBHOOK VE WEB SUNUCUSU (AIOHTTP) ---
 async def handle_ping(request):
@@ -88,7 +88,7 @@ bot = ArcBot()
 # --- YOUTUBE KONTROLÜ ---
 @tasks.loop(minutes=5)
 async def check_youtube():
-    global seen_video_ids
+    global seen_video_ids, is_initial_check
     print("[YOUTUBE CHECK] YouTube kontrol ediliyor...", flush=True)
     if not YOUTUBE_API_KEY:
         print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!", flush=True)
@@ -99,14 +99,15 @@ async def check_youtube():
     try:
         response = requests.get(url).json()
         if "items" in response:
-            # İlk çalıştırmada mevcut son videoları listeye ekle ki bot açılır açılmaz eski videoları spamlamasın
-            if not seen_video_ids:
+            # İlk başlangıçta sadece NORMAL VİDEOLARI hafızaya al, CANLI YAYINLARI atlama!
+            if is_initial_check:
                 for item in response["items"]:
                     v_id = item["id"].get("videoId")
-                    if v_id:
+                    live_broadcast = item["snippet"].get("liveBroadcastContent")
+                    if v_id and live_broadcast != "live":
                         seen_video_ids.add(v_id)
-                print(f"[YOUTUBE CHECK] İlk başlangıç, hafızaya alınan mevcut video ID'leri: {seen_video_ids}", flush=True)
-                return
+                is_initial_check = False
+                print(f"[YOUTUBE CHECK] İlk tarama tamamlandı. Hafızaya alınan eski videolar: {seen_video_ids}", flush=True)
 
             for item in response["items"]:
                 video_id = item["id"].get("videoId")
@@ -120,7 +121,7 @@ async def check_youtube():
                     seen_video_ids.add(video_id)
                     continue
                 
-                # Yeni video veya canlı yayın bulundu!
+                # Canlı yayın veya yeni video
                 target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
                 if target_channel:
                     live_broadcast = item["snippet"].get("liveBroadcastContent")
@@ -139,9 +140,8 @@ async def check_youtube():
                             f"<@&{YOUTUBE_ROLE_ID}>"
                         )
                     
-                    # Bildirim atılan videoyu hafızaya ekle
                     seen_video_ids.add(video_id)
-                    print(f"[YOUTUBE CHECK] 🎉 Yeni içerik bildirimi atıldı: {video_id}", flush=True)
+                    print(f"[YOUTUBE CHECK] 🎉 YouTube bildirimi fırlatıldı: {video_id}", flush=True)
                     break
     except Exception as e:
         print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
