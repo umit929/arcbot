@@ -1,163 +1,97 @@
 import os
 import sys
-import asyncio
 import discord
 from discord.ext import tasks, commands
 import requests
 from aiohttp import web
 
-# Print çıktılarını konsola anında basmaya zorluyoruz
 sys.stdout.reconfigure(line_buffering=True)
 
-# --- BOT AYARLARI ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
 YOUTUBE_CHANNEL_ID = 'UCRlsFZE_4iXGyi2Dhxcduhg'
-KICK_USERNAME = 'arctune'
 DISCORD_CHANNEL_ID = 1551892041737183332
-
-# ROL ID'LERİ
-KICK_ROLE_ID = "1554136780402466826"
 YOUTUBE_ROLE_ID = "1554137072003190794"
 
 intents = discord.Intents.default()
 intents.message_content = True
 
+bot = commands.Bot(command_prefix="!", intents=intents)
 seen_video_ids = set()
-is_kick_live = False
 is_initial_check = True
 
-# --- WEBHOOK VE WEB SUNUCUSU (AIOHTTP) ---
+# Render uyku moduna geçmesin diye sahte web sunucusu (7/24 aktif kalmasını sağlar)
 async def handle_ping(request):
     return web.Response(text="ArcBot 7/24 Aktif!")
-
-async def handle_kick_webhook(request):
-    global is_kick_live
-    try:
-        data = await request.json()
-        print(f"[WEBHOOK] Kick bildirimi alındı: {data}", flush=True)
-        
-        is_live = data.get("is_live", False)
-        stream_title = data.get("title", f"{KICK_USERNAME} Kick Canlı Yayını")
-        
-        if is_live and not is_kick_live:
-            is_kick_live = True
-            target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
-            if target_channel:
-                kick_url = f"https://kick.com/{KICK_USERNAME}"
-                await target_channel.send(
-                    f"🟢 **KICK'TE CANLI YAYIN BAŞLADI!**\n"
-                    f"**Başlık:** {stream_title}\n"
-                    f"Aramıza katılın: {kick_url}\n\n"
-                    f"<@&{KICK_ROLE_ID}>"
-                )
-                print("[WEBHOOK] 🎉 Discord kanalına bildirim gönderildi!", flush=True)
-        elif not is_live:
-            is_kick_live = False
-            
-        return web.Response(text="OK", status=200)
-    except Exception as e:
-        print(f"[WEBHOOK HATA] {e}", flush=True)
-        return web.Response(text="Error", status=400)
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle_ping)
-    app.router.add_post('/kick-webhook', handle_kick_webhook)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"[WEB SERVER] {port} portunda Webhook dinleyici aktif!", flush=True)
 
-# --- CUSTOM BOT CLASS ---
-class ArcBot(commands.Bot):
-    def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        self.loop.create_task(start_web_server())
-        
-        if not check_youtube.is_running():
-            check_youtube.start()
-            print("[SİSTEM] YouTube kontrol döngüsü başlatıldı.", flush=True)
-
-bot = ArcBot()
-
-# --- YOUTUBE KONTROLÜ ---
-@tasks.loop(minutes=5)
-async def check_youtube():
-    global seen_video_ids, is_initial_check
-    print("[YOUTUBE CHECK] YouTube kontrol ediliyor...", flush=True)
-    if not YOUTUBE_API_KEY:
-        print("[YOUTUBE CHECK] HATA: YouTube API Key bulunamadı!", flush=True)
-        return
-
-    url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=snippet,id&order=date&maxResults=5"
-    
-    try:
-        response = requests.get(url).json()
-        if "items" in response:
-            # İlk başlangıçta sadece NORMAL VİDEOLARI hafızaya al, CANLI YAYINLARI atlama!
-            if is_initial_check:
-                for item in response["items"]:
-                    v_id = item["id"].get("videoId")
-                    live_broadcast = item["snippet"].get("liveBroadcastContent")
-                    if v_id and live_broadcast != "live":
-                        seen_video_ids.add(v_id)
-                is_initial_check = False
-                print(f"[YOUTUBE CHECK] İlk tarama tamamlandı. Hafızaya alınan eski videolar: {seen_video_ids}", flush=True)
-
-            for item in response["items"]:
-                video_id = item["id"].get("videoId")
-                if not video_id or video_id in seen_video_ids:
-                    continue
-                
-                # YouTube Shorts kontrolü
-                shorts_check_url = f"https://www.youtube.com/shorts/{video_id}"
-                shorts_res = requests.head(shorts_check_url, allow_redirects=False)
-                if shorts_res.status_code == 200:
-                    seen_video_ids.add(video_id)
-                    continue
-                
-                # Canlı yayın veya yeni video
-                target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
-                if target_channel:
-                    live_broadcast = item["snippet"].get("liveBroadcastContent")
-                    video_url = f"https://www.youtube.com/watch?v={video_id}"
-                    
-                    if live_broadcast == "live":
-                        await target_channel.send(
-                            f"🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\n"
-                            f"Yayın açıldı, kaçırmayın!\n{video_url}\n\n"
-                            f"<@&{YOUTUBE_ROLE_ID}>"
-                        )
-                    else:
-                        await target_channel.send(
-                            f"🎬 **YENİ YOUTUBE VİDEOSU YAYINDA!**\n"
-                            f"Yeni video geldi, iyi seyirler!\n{video_url}\n\n"
-                            f"<@&{YOUTUBE_ROLE_ID}>"
-                        )
-                    
-                    seen_video_ids.add(video_id)
-                    print(f"[YOUTUBE CHECK] 🎉 YouTube bildirimi fırlatıldı: {video_id}", flush=True)
-                    break
-    except Exception as e:
-        print(f"[YOUTUBE CHECK] Hata: {e}", flush=True)
+@bot.event
+async def setup_hook():
+    bot.loop.create_task(start_web_server())
+    check_youtube.start()
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user.name} başarıyla aktif oldu!', flush=True)
+    print(f'✅ {bot.user.name} YouTube nöbetine başladı!', flush=True)
 
-@bot.command()
-async def ping(ctx):
-    await ctx.send('Pong! 🏓 ArcBot çalışıyor.')
+# 15 dakika yaptık ki günlük API kotan asla dolmasın
+@tasks.loop(minutes=15)
+async def check_youtube():
+    global seen_video_ids, is_initial_check
+    if not YOUTUBE_API_KEY:
+        return
 
-@bot.command()
-async def kicktest(ctx):
-    global is_kick_live
-    is_kick_live = False
-    await ctx.send('🔄 Kick durum kontrolü sıfırlandı.')
+    url = f"https://www.googleapis.com/youtube/v3/search?key={YOUTUBE_API_KEY}&channelId={YOUTUBE_CHANNEL_ID}&part=snippet,id&order=date&maxResults=3"
+    
+    try:
+        response = requests.get(url).json()
+        if "items" not in response:
+            return
+
+        for item in response["items"]:
+            video_id = item["id"].get("videoId")
+            if not video_id:
+                continue
+            
+            # BÜYÜK BUG ÇÖZÜMÜ: Bot ilk açıldığında videoları sadece hafızaya alır, mesaj atmaz
+            if is_initial_check:
+                seen_video_ids.add(video_id)
+                continue
+
+            if video_id in seen_video_ids:
+                continue
+                
+            # Kendi yazdığın o harika Shorts engelleme kontrolü
+            shorts_check_url = f"https://www.youtube.com/shorts/{video_id}"
+            shorts_res = requests.head(shorts_check_url, allow_redirects=False)
+            if shorts_res.status_code == 200:
+                seen_video_ids.add(video_id)
+                print(f"Shorts atlandı: {video_id}", flush=True)
+                continue
+
+            # Normal video veya Canlı Yayın geldiğinde çalışacak kısım
+            target_channel = bot.get_channel(DISCORD_CHANNEL_ID)
+            if target_channel:
+                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                live_broadcast = item["snippet"].get("liveBroadcastContent")
+                
+                if live_broadcast == "live":
+                    await target_channel.send(f"🔴 **YOUTUBE'DA CANLI YAYIN BAŞLADI!**\n{video_url}\n<@&{YOUTUBE_ROLE_ID}>")
+                else:
+                    await target_channel.send(f"🎬 **YENİ VİDEO YAYINDA!**\n{video_url}\n<@&{YOUTUBE_ROLE_ID}>")
+                
+            seen_video_ids.add(video_id)
+            
+        is_initial_check = False
+    except Exception as e:
+        print(f"Hata: {e}", flush=True)
 
 bot.run(BOT_TOKEN)
